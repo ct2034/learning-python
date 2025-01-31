@@ -17,21 +17,17 @@ def dist(a, b):
     return np.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
 
 
-def getBaseField(h, w):
+def getBaseField(h, w, t):
     """Generate a base field of directions [0, 2pi]"""
-    mid = (w//2, h//2)
-    directions = np.zeros((h, w))
-    for i in range(h):
-        for j in range(w):
-            directions[i, j] = -(
-                # np.arctan2(i-mid[1], j-mid[0]) +
-                np.sin(33. * j / w) +
-                np.sin(42. * i / h) +
-                np.cos(101. * j / w) +
-                np.sin(83. * i / h) +
-                np.cos(53. * j / w) +
-                np.cos(69. * i / h)
-            )
+    directions = -(
+        np.sin(33. * np.arange(w) / w + t) +
+        np.sin(42. * np.arange(h) / h + t)[:, None] +
+        np.cos(101. * np.arange(w) / w + t) +
+        np.sin(83. * np.arange(h) / h + t)[:, None] +
+        np.cos(53. * np.arange(w) / w + t) +
+        np.cos(69. * np.arange(h) / h + t)[:, None]
+    )
+
     # normalize to [0, 1]
     mi = np.min(directions)
     ma = np.max(directions)
@@ -44,15 +40,16 @@ def getNextFrame(i, old_frame, particles, directions, dirField, h, w):
     mid = (w//2, h//2)
     
     # decay existing data
-    old_frame = old_frame * 0.95
-    old_frame = cv2.GaussianBlur(old_frame, (5, 5), 0.31)
+    old_frame = old_frame * 0.98
+    old_frame = cv2.GaussianBlur(old_frame, (7, 7), 0.8)
 
     prev_p = particles.copy()
     offcenter = np.linalg.norm(particles - mid, axis=1)
 
     for i_p, p in enumerate(particles):
-        l = np.random.normal(0, 1) + 4.
-        fielddir = dirField[p[1], p[0]] * 4. * np.pi + np.random.normal(0, 0.05)
+        l = np.random.normal(0, 1) + 6.
+        fielddir = dirField[p[1], p[0]] * 4. * \
+            np.pi + np.random.normal(0, 0.08)
         fielddir = fielddir % (2. * np.pi)
 
         d_dir = directions[i_p] - fielddir
@@ -82,16 +79,29 @@ def getNextFrame(i, old_frame, particles, directions, dirField, h, w):
             p = (p[0], p[1] + h)
             wrapped = True
 
+        t = i + i_p / 4.
+
+        offcent = (offcenter[i_p] / (dist(mid, (0, 0))))
+        central = (1. - offcent) ** 2
+        brightness = 0.5 + 0.5 * central
+
         col = (
-            int(255. * (1. - (offcenter[i_p] / w))) + \
-                int(127. * np.cos(i / 33.)),
-            int(255. * (offcenter[i_p] / w)) + \
-                int(127. * np.cos(i / 42.)),
-            128 + int(127. * np.sin(i / 54.))
+            brightness * (.5 + .5 * np.cos(t / 187.) * central),
+            brightness * (.5 + .5 * np.cos(t / 87.) * offcent),
+            brightness * (.5 + .5 * np.sin(t / 101.))
         )
+        # col = (
+        #     (1. * offcent),
+        #     (1. * (p[0] / w)),
+        #     (1. * (p[1] / h))
+        # )
+                
+        # if i % 200 == 0:
+        #     print(col)
 
         # draw line from previous point to current point
         if not wrapped:
+            # cv2.line(old_frame, prev_p[i_p], p, (0, 0, 0), 2)
             cv2.line(old_frame, prev_p[i_p], p, col, 1)
 
         # update particle
@@ -114,7 +124,7 @@ def initDirections(n):
 def main():
     # Frame size
     w, h = 1920, 1080
-    
+    n = 800
 
     # remove the following two lines for not full screen
     cv2.namedWindow('image', cv2.WND_PROP_FULLSCREEN)
@@ -126,15 +136,17 @@ def main():
     last_fps_display_time = 0
 
     npimage = initFrame(h, w)
-    particles = initParticles(h, w, 800)
-    directions = initDirections(800)
-    dirField = getBaseField(h, w)
+    particles = initParticles(h, w, n)
+    directions = initDirections(n)
 
     i = 0
     while True:
         start = time.time()   
         # Get a numpy array to display from the simulation
-        npimage, particles, directions = getNextFrame(i, npimage, particles, directions, dirField, h, w)
+        if i % 10 == 0:
+            dirField = getBaseField(h, w, t = i / 100.)
+        npimage, particles, directions = getNextFrame(
+            i, npimage, particles, directions, dirField, h, w)
         i += 1
 
         cv2.imshow('image', npimage)
