@@ -28,24 +28,6 @@ def subtract_two_numbers(a: int, b: int) -> int:
     b = int(b)
     return a - b
 
-
-# Tools can still be manually defined and passed into chat
-subtract_two_numbers_tool = {
-    "type": "function",
-    "function": {
-        "name": "subtract_two_numbers",
-        "description": "Subtract two numbers",
-        "parameters": {
-            "type": "object",
-            "required": ["a", "b"],
-            "properties": {
-                "a": {"type": "integer", "description": "The first number"},
-                "b": {"type": "integer", "description": "The second number"},
-            },
-        },
-    },
-}
-
 available_functions = {
     "add_two_numbers": add_two_numbers,
     "subtract_two_numbers": subtract_two_numbers,
@@ -54,6 +36,8 @@ available_functions = {
 questions = [
     {"role": "user", "content": "What is three plus one?"},
     {"role": "user", "content": "And what is 42 minus eight?"},
+    {"role": "user", "content": "What is 1 and 1?"},
+    {"role": "user", "content": "If I have 10 cookies and eat 4, how many are left?"},
 ]
 
 response = None
@@ -71,11 +55,12 @@ for question in questions:
         response: ChatResponse = chat(
             MODEL,
             messages=messages,
-            tools=[add_two_numbers, subtract_two_numbers_tool],
+            tools=[add_two_numbers, subtract_two_numbers],
         )
         assert response is not None, "Must have response."
         print(">> response.message=")
         pprint(response.message)
+        messages.append(response.message)
         if response.message.tool_calls:
             # There may be multiple tool calls in the response
             tool_results = []
