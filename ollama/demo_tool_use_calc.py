@@ -1,7 +1,10 @@
 from ollama import ChatResponse, chat
 from pprint import pprint
 
-MODEL = "llama3.2:3b"
+# MODEL = "llama3.2:1b"
+# MODEL = "llama3.2:3b"
+# MODEL = "granite3.1-dense:2b"
+MODEL = "granite3.1-dense:8b"
 
 
 def add_two_numbers(a: int, b: int) -> str:
@@ -15,22 +18,23 @@ def add_two_numbers(a: int, b: int) -> str:
     Returns:
       int: The sum of the two numbers
     """
+    print(f"== A tool call happened :)\n   {a} + {b} = {a+b}")
     a = int(a)
     b = int(b)
     return f"{a} + {b} = {a+b}"
 
 
-def subtract_two_numbers(a: int, b: int) -> str:
-    """
-    Subtract two numbers
-    """
-    a = int(a)
-    b = int(b)
-    return f"{a} - {b} = {a-b}"
+# def subtract_two_numbers(a: int, b: int) -> str:
+#     """
+#     Subtract two numbers
+#     """
+#     a = int(a)
+#     b = int(b)
+#     return f"{a} - {b} = {a-b}"
 
 available_functions = {
     "add_two_numbers": add_two_numbers,
-    "subtract_two_numbers": subtract_two_numbers,
+    # "subtract_two_numbers": subtract_two_numbers,
 }
 
 questions = [
@@ -38,8 +42,8 @@ questions = [
     # {"role": "user", "content": "And what is 42 minus eight?"},
     # {"role": "user", "content": "What is 1 and 1?"},
     # {"role": "user", "content": "If I have 10 cookies and eat 4, how many are left?"},
-    {"role": "system", "content": "Assist the user as accurately as possible. You may need to call the tools more than once. For example if the user asks for the sum of 4 numbers a, b, c and d, first call the add_two_numbers tool with a and b, remember the result, then call it with c and d, remember that result and then call the toll again with the two remembered results."},
-    {"role": "user", "content": "What is the sum of 20, -31, 3 and 8?"}
+    {"role": "system", "content": "Assist the user with calculations as accurately as possible. You may need to call the tools more than once. For example if the user asks for the sum of 4 numbers a, b, c and d, first call the add_two_numbers tool with a and b, remember the result, then call it with that result and c, remember that result and then call the tool again with the last remembered result and d. Perform similarly cascaded tool calls for any number of numbers to sum."},
+    {"role": "user", "content": "What is the sum of 20145, -31357, 11212?"}
 ]
 
 response = None
@@ -57,7 +61,7 @@ for question in questions:
         response: ChatResponse = chat(
             MODEL,
             messages=messages,
-            tools=[add_two_numbers, subtract_two_numbers],
+            tools=list(available_functions.values())
         )
         assert response is not None, "Must have response."
         print(">> response.message=")
