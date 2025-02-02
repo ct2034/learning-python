@@ -10,12 +10,12 @@ from typing import Dict
 # MODEL = "granite3.1-dense:8b"
 # MODEL = "smollm2:1.7b"
 # MODEL = "command-r7b"
-# MODEL = "llama3.1:8b"
+MODEL = "llama3.1:8b"
 # MODEL = "llama3.2:1b"
 # MODEL = "llama3.2:3b"
 # MODEL = "llama3.3"
 # MODEL = "mistral"
-MODEL = "qwen2:7b"
+# MODEL = "qwen2:7b"
 
 NOTES_PATH = os.path.join(os.path.dirname(__file__), "diary_notes")
 REMEMBER_NOTE = os.path.join(os.path.dirname(__file__), "diary_notes", "llm_remember.txt")
