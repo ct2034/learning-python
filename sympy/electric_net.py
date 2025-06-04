@@ -1,4 +1,4 @@
-
+from pprint import pprint
 
 from sympy import symbols, Eq, solve, Matrix, linsolve
 
@@ -18,4 +18,4 @@ eqs = [
 ]
 
 sol = solve(eqs, vars)
-print(sol)
+pprint(sol)
