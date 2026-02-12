@@ -39,8 +39,7 @@ class ChartLinker:
                 console.log('Setting up chart event linking');
                 
                 ganttChart.on('mouseover', (params) => {{
-                    const safeParams = extractSafeParams(params);
-                    emitEvent('gantt_hover', safeParams);
+                    emitEvent('gantt_hover', extractSafeParams(params));
                 }});
                 
                 ganttChart.on('mouseout', (params) => {{
