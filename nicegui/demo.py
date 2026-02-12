@@ -1,227 +1,247 @@
 from nicegui import ui
 from random import randint, random
+from typing import Dict, Any
 
-COL_TRANSP = "#505050"
-COL_DISP = "#EE9010"
-COL_SCREW = "#20E040"
-COL_HIGHLIGHT = "#0010EE"
+# Color constants
+class Colors:
+    TRANSP = "#505050"
+    DISP = "#EE9010" 
+    SCREW = "#20E040"
+    HIGHLIGHT = "#0010EE"
+    IDLE = "#AAAAAA"
+
+# Data mappings
+SERIES_CONFIG = {
+    "Screwing": {"color": Colors.SCREW, "gantt_index": 1, "graph_index": 0},
+    "Transport": {"color": Colors.TRANSP, "gantt_index": 2, "graph_index": None},
+    "Dispensing": {"color": Colors.DISP, "gantt_index": 3, "graph_index": 1},
+}
 
 
-def update_gantt():
-    gantt.options["series"][0]["data"][0] = randint(100, 500)
-    gantt.options["series"][0]["data"][1] = randint(100, 500)
-    gantt.options["series"][1]["data"][0] = randint(100, 500)
-    gantt.options["series"][1]["data"][1] = randint(100, 500)
+class ChartLinker:
+    """Handles linking between gantt and graph charts"""
+    
+    def __init__(self, gantt_chart, graph_chart):
+        self.gantt = gantt_chart
+        self.graph = graph_chart
+        
+    def setup_event_listeners(self):
+        """Set up event listeners after UI is initialized"""
+        ui.run_javascript(f"""
+        setTimeout(() => {{
+            const ganttChart = getElement({self.gantt.id}).chart;
+            const graphChart = getElement({self.graph.id}).chart;
+            
+            if (ganttChart && graphChart) {{
+                console.log('Setting up chart event linking');
+                
+                ganttChart.on('mouseover', (params) => {{
+                    const safeParams = extractSafeParams(params);
+                    emitEvent('gantt_hover', safeParams);
+                }});
+                
+                ganttChart.on('mouseout', (params) => {{
+                    emitEvent('gantt_leave', extractSafeParams(params));
+                }});
+                
+                graphChart.on('mouseover', (params) => {{
+                    emitEvent('graph_hover', extractSafeParams(params));
+                }});
+                
+                graphChart.on('mouseout', (params) => {{
+                    emitEvent('graph_leave', extractSafeParams(params));
+                }});
+            }}
+            
+            function extractSafeParams(params) {{
+                return {{
+                    seriesName: params.seriesName,
+                    seriesIndex: params.seriesIndex,
+                    dataIndex: params.dataIndex,
+                    name: params.name,
+                    value: params.value,
+                    componentType: params.componentType
+                }};
+            }}
+        }}, 1000);
+        """)
+    
+    def highlight_corresponding_element(self, element_name: str, target_chart: str):
+        """Highlight corresponding element in the target chart"""
+        if element_name not in SERIES_CONFIG:
+            return
+            
+        config = SERIES_CONFIG[element_name]
+        
+        if target_chart == "graph" and config["graph_index"] is not None:
+            self.graph.options["series"]["nodes"][config["graph_index"]]["itemStyle"]["color"] = Colors.HIGHLIGHT
+            self.graph.update()
+        elif target_chart == "gantt":
+            self.gantt.options["series"][config["gantt_index"]]["itemStyle"]["color"] = Colors.HIGHLIGHT
+            self.gantt.update()
+    
+    def reset_colors(self):
+        """Reset all chart elements to their original colors"""
+        # Reset graph nodes
+        for name, config in SERIES_CONFIG.items():
+            if config["graph_index"] is not None:
+                self.graph.options["series"]["nodes"][config["graph_index"]]["itemStyle"]["color"] = config["color"]
+        
+        # Reset gantt series
+        for name, config in SERIES_CONFIG.items():
+            self.gantt.options["series"][config["gantt_index"]]["itemStyle"]["color"] = config["color"]
+        
+        self.gantt.update()
+        self.graph.update()
+
+
+def create_gantt_chart() -> ui.echart:
+    """Create and configure the Gantt chart"""
+    return ui.echart({
+        "tooltip": {"trigger": "item"},
+        "legend": {},
+        "xAxis": {"type": "value"},
+        "yAxis": {
+            "type": "category",
+            "data": ["Product A", "Product B"],
+        },
+        "series": [
+            {
+                "name": "Idle",
+                "type": "bar",
+                "stack": "total",
+                "label": {"show": True},
+                "emphasis": {"focus": "series"},
+                "data": [200, 0],
+                "itemStyle": {"color": Colors.IDLE},
+            },
+            {
+                "name": "Screwing",
+                "type": "bar",
+                "stack": "total",
+                "label": {"show": True},
+                "emphasis": {"focus": "series"},
+                "data": [320, 200],
+                "itemStyle": {"color": Colors.SCREW},
+            },
+            {
+                "name": "Transport", 
+                "type": "bar",
+                "stack": "total",
+                "label": {"show": True},
+                "emphasis": {"focus": "series"},
+                "data": [110, 320],
+                "itemStyle": {"color": Colors.TRANSP},
+            },
+            {
+                "name": "Dispensing",
+                "type": "bar", 
+                "stack": "total",
+                "label": {"show": True},
+                "emphasis": {"focus": "series"},
+                "data": [150, 110],
+                "itemStyle": {"color": Colors.DISP},
+            },
+        ],
+    })
+
+
+def create_graph_chart() -> ui.echart:
+    """Create and configure the Graph chart"""
+    return ui.echart({
+        "tooltip": {"trigger": "item"},
+        "series": {
+            "type": "graph",
+            "label": {"show": True},
+            "symbolSize": 100,
+            "edgeSymbol": ["none", "arrow"],
+            "nodes": [
+                {
+                    "name": "Screwing",
+                    "x": -1,
+                    "y": 0,
+                    "itemStyle": {"color": Colors.SCREW},
+                },
+                {
+                    "name": "Dispensing",
+                    "x": 1,
+                    "y": 0,
+                    "itemStyle": {"color": Colors.DISP},
+                },
+            ],
+            "links": [
+                {
+                    "source": "Screwing",
+                    "target": "Dispensing", 
+                    "lineStyle": {"width": 2},
+                }
+            ],
+        }
+    })
+
+
+def update_gantt_data(gantt: ui.echart):
+    """Update Gantt chart with random data"""
+    t_idle = randint(100, 300)
+    t_screw = randint(200, 400)
+    t_transp = randint(100, 300)
+    t_disp = randint(150, 350)
+    gantt.options["series"][0]["data"] = [t_idle, 0]
+    gantt.options["series"][1]["data"] = [t_screw, t_idle]
+    gantt.options["series"][2]["data"] = [t_transp, t_screw]
+    gantt.options["series"][3]["data"] = [t_disp, t_transp]
     gantt.update()
 
 
-def update_graph():
+def update_graph_data(graph: ui.echart):
+    """Update Graph chart with random positions"""
     graph.options["series"]["nodes"][0]["x"] = random() - 1
     graph.options["series"]["nodes"][0]["y"] = random()
-    graph.options["series"]["nodes"][1]["x"] = random() + 1
+    graph.options["series"]["nodes"][1]["x"] = random() + 1 
     graph.options["series"]["nodes"][1]["y"] = random()
     graph.update()
 
 
-# Event handlers for individual elements
-def handle_gantt_element_hover(e):
-    print(f"Gantt element hover event: {e.args}")
-    series_name = e.args.get('seriesName')
-    print(f"Series name: {series_name}")
-    # Highlight the hovered element in the graph
-    if series_name == "Screwing":
-        graph.options["series"]["nodes"][0]["itemStyle"]["color"] = COL_HIGHLIGHT
-        graph.update()
-    elif series_name == "Dispensing":
-        graph.options["series"]["nodes"][1]["itemStyle"]["color"] = COL_HIGHLIGHT
-        graph.update()
-
-
-def handle_gantt_element_leave(e):
-    print(f"Gantt element leave event")
-    # Reset the graph node colors when leaving
-    graph.options["series"]["nodes"][0]["itemStyle"]["color"] = COL_SCREW
-    graph.options["series"]["nodes"][1]["itemStyle"]["color"] = COL_DISP
-    graph.update()
-
-
-def handle_graph_element_hover(e):
-    print(f"Graph element hover event: {e.args}")
-    node_name = e.args.get('name')
-    print(f"Node name: {node_name}")
-    # Highlight the corresponding series in the Gantt chart
-    if node_name == "Screwing":
-        gantt.options["series"][0]["itemStyle"]["color"] = COL_HIGHLIGHT
-        gantt.update()
-    elif node_name == "Dispensing":
-        gantt.options["series"][2]["itemStyle"]["color"] = COL_HIGHLIGHT
-        gantt.update()
-
-
-def handle_graph_element_leave(e):
-    print(f"Graph element leave event")
-    # Reset the Gantt chart series colors when leaving
-    gantt.options["series"][0]["itemStyle"]["color"] = COL_SCREW
-    gantt.options["series"][2]["itemStyle"]["color"] = COL_DISP
-    gantt.update()
-
-
-def setup_event_listeners():
-    """Set up event listeners after UI is initialized"""
-    ui.run_javascript(f"""
-    setTimeout(() => {{
-        // Get the chart instances
-        const ganttChart = getElement({gantt.id}).chart;
-        const graphChart = getElement({graph.id}).chart;
+def main():
+    """Main application logic"""
+    with ui.grid(columns=2).classes("w-full"):
+        gantt = create_gantt_chart()
+        graph = create_graph_chart()
         
-        if (ganttChart) {{
-            console.log('Setting up Gantt chart events');
-            // Listen for mouseover events on chart elements
-            ganttChart.on('mouseover', function(params) {{
-                console.log('Gantt mouseover params:', params);
-                // Extract only the properties we need to avoid circular references
-                const safeParams = {{
-                    seriesName: params.seriesName,
-                    seriesIndex: params.seriesIndex,
-                    dataIndex: params.dataIndex,
-                    name: params.name,
-                    value: params.value,
-                    componentType: params.componentType
-                }};
-                emitEvent('gantt_element_hover', safeParams);
-            }});
-            
-            ganttChart.on('mouseout', function(params) {{
-                console.log('Gantt mouseout params:', params);
-                const safeParams = {{
-                    seriesName: params.seriesName,
-                    seriesIndex: params.seriesIndex,
-                    dataIndex: params.dataIndex,
-                    name: params.name
-                }};
-                emitEvent('gantt_element_leave', safeParams);
-            }});
-        }} else {{
-            console.log('Gantt chart not found');
-        }}
-        
-        if (graphChart) {{
-            console.log('Setting up Graph chart events');
-            graphChart.on('mouseover', function(params) {{
-                console.log('Graph mouseover params:', params);
-                const safeParams = {{
-                    seriesName: params.seriesName,
-                    seriesIndex: params.seriesIndex,
-                    dataIndex: params.dataIndex,
-                    name: params.name,
-                    value: params.value,
-                    componentType: params.componentType
-                }};
-                emitEvent('graph_element_hover', safeParams);
-            }});
-            
-            graphChart.on('mouseout', function(params) {{
-                console.log('Graph mouseout params:', params);
-                const safeParams = {{
-                    seriesName: params.seriesName,
-                    seriesIndex: params.seriesIndex,
-                    dataIndex: params.dataIndex,
-                    name: params.name
-                }};
-                emitEvent('graph_element_leave', safeParams);
-            }});
-        }} else {{
-            console.log('Graph chart not found');
-        }}
-    }}, 1000);
-    """)
+        ui.button("Update Gantt", on_click=lambda: update_gantt_data(gantt))
+        ui.button("Update Graph", on_click=lambda: update_graph_data(graph))
 
-
-with ui.grid(columns=2).classes("w-full"):
-    gantt = ui.echart(
-        {
-            "tooltip": {"trigger": "item"},
-            "legend": {},
-            "xAxis": {"type": "value"},
-            "yAxis": {
-                "type": "category",
-                "data": ["Product A", "Product B"],
-            },
-            "series": [
-                {
-                    "name": "Screwing",
-                    "type": "bar",
-                    "stack": "total",
-                    "label": {"show": True},
-                    "emphasis": {"focus": "series"},
-                    "data": [320, 200],
-                    "itemStyle": {"color": COL_SCREW},
-                },
-                {
-                    "name": "Transport",
-                    "type": "bar",
-                    "stack": "total",
-                    "label": {"show": True},
-                    "emphasis": {"focus": "series"},
-                    "data": [110, 33],
-                    "itemStyle": {"color": COL_TRANSP},
-                },
-                {
-                    "name": "Dispensing",
-                    "type": "bar",
-                    "stack": "total",
-                    "label": {"show": True},
-                    "emphasis": {"focus": "series"},
-                    "data": [120, 399],
-                    "itemStyle": {"color": COL_DISP},
-                },
-            ],
-        },
-    )
+    # Set up chart linking
+    linker = ChartLinker(gantt, graph)
     
-    graph = ui.echart(
-        {
-            "tooltip": {"trigger": "item"},
-            "series": {
-                "type": "graph",
-                "label": {"show": True},
-                "symbolSize": 100,
-                "edgeSymbol": ["none", "arrow"],
-                "nodes": [
-                    {
-                        "name": "Screwing",
-                        "x": -1,
-                        "y": 0,
-                        "itemStyle": {"color": COL_SCREW},
-                    },
-                    {
-                        "name": "Dispensing",
-                        "x": 1,
-                        "y": 0,
-                        "itemStyle": {"color": COL_DISP},
-                    },
-                ],
-                "links": [
-                    {
-                        "source": "Screwing",
-                        "target": "Dispensing",
-                        "lineStyle": {"width": 2},
-                    }
-                ],
-            }
-        }
-    )
+    # Event handlers using the linker
+    def handle_gantt_hover(e):
+        series_name = e.args.get('seriesName')
+        if series_name:
+            linker.highlight_corresponding_element(series_name, "graph")
     
-    ui.button("Update Gantt", on_click=update_gantt)
-    ui.button("Update Graph", on_click=update_graph)
+    def handle_gantt_leave(e):
+        linker.reset_colors()
+    
+    def handle_graph_hover(e):
+        node_name = e.args.get('name')
+        if node_name:
+            linker.highlight_corresponding_element(node_name, "gantt")
+    
+    def handle_graph_leave(e):
+        linker.reset_colors()
+    
+    # Register event handlers
+    ui.on('gantt_hover', handle_gantt_hover)
+    ui.on('gantt_leave', handle_gantt_leave) 
+    ui.on('graph_hover', handle_graph_hover)
+    ui.on('graph_leave', handle_graph_leave)
+    
+    # Set up event listeners after UI loads
+    ui.timer(2.0, linker.setup_event_listeners, once=True)
 
-# Handle the emitted events
-ui.on('gantt_element_hover', handle_gantt_element_hover)
-ui.on('gantt_element_leave', handle_gantt_element_leave)
-ui.on('graph_element_hover', handle_graph_element_hover)
-ui.on('graph_element_leave', handle_graph_element_leave)
 
-# Set up events when the page loads
-ui.timer(2.0, setup_event_listeners, once=True)
-
-ui.run()  # Only call this once!
+# Use the multiprocessing-compatible guard
+if __name__ in {"__main__", "__mp_main__"}:
+    main()
+    ui.run()
